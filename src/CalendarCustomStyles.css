@@ -1,0 +1,18 @@
+/* Aumenta el alto de cada grupo de slots (por ejemplo, cada 15 minutos) */
+.rbc-timeslot-group {
+    height: 60px; /* Ajusta este valor según necesites */
+    width: 100px;
+  }
+  
+  /* Si quieres más control: cada celda individual */
+  .rbc-time-slot {
+    min-height: 10px; /* Este puede ayudar también */
+    
+  }
+  
+  /* Opcional: fuente más grande para ver mejor el contenido */
+  .rbc-event {
+    font-size: 0.95rem;
+    padding: 2px 4px;
+  }
+  
