@@ -1,9 +1,11 @@
 import Modal from 'react-modal';
 import { useState, useEffect } from 'react';
+import { rooms } from '../data/rooms';
+
 
 Modal.setAppElement('#root'); // para accesibilidad
 
-export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInfo, professionals, selectedEvent, onDelete }) {
+export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInfo, professionals, selectedEvent, onDelete, events }) {
   
   //HOOK STATES
   
@@ -14,6 +16,14 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
   const [repeat, setRepeat] = useState('none');
   const [repeatUntil, setRepeatUntil] = useState('');
   const [applyToSeries, setApplyToSeries] = useState(false);
+  const [roomId, setRoomId] = useState(rooms[0]?.id || '');
+  const [conflictMessage, setConflictMessage] = useState('');
+  const [forceSave, setForceSave] = useState(false);
+  const [pendingEvent, setPendingEvent] = useState(null);
+
+
+
+
 
 
   
@@ -23,6 +33,7 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
     if (selectedEvent) {
       setTitle(selectedEvent.title || '');
       setProfessionalId(String(selectedEvent.professionalId) || '');
+      setRoomId(String(selectedEvent.roomId) || rooms[0]?.id || '');
       setStart(new Date(selectedEvent.start));
       setEnd(new Date(selectedEvent.end));
       setRepeat(selectedEvent.repeat || 'none');
@@ -35,15 +46,16 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
     } else if (slotInfo) {
       setTitle('');
       setProfessionalId(professionals[0]?.id || '');
+      setRoomId(rooms[0]?.id || '');
       setStart(slotInfo.start);
       setEnd(slotInfo.end);
       setRepeat('none');
       setRepeatUntil('');
       setApplyToSeries(false);
     } else {
-      // en caso de que no haya ni slotInfo ni selectedEvent
       setTitle('');
       setProfessionalId(professionals[0]?.id || '');
+      setRoomId(rooms[0]?.id || '');
       setStart(null);
       setEnd(null);
       setRepeat('none');
@@ -51,8 +63,26 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
       setApplyToSeries(false);
     }
   }, [slotInfo, selectedEvent, professionals]);
+
+
   
   
+  
+  
+  const checkConflict = (newEvent) => {
+    return events.some((event) => {
+      if (event.id === newEvent.id) return false;
+  
+      const sameProfessional = event.professionalId === newEvent.professionalId;
+      const sameRoom = event.roomId === newEvent.roomId;
+  
+      const overlaps =
+        new Date(newEvent.start) < new Date(event.end) &&
+        new Date(newEvent.end) > new Date(event.start);
+  
+      return (sameProfessional || sameRoom) && overlaps;
+    });
+  };
   
   
 
@@ -61,30 +91,47 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
     if (!title || !start || !end) return;
   
     const eventData = {
+      id: selectedEvent?.id,
       title,
       start,
       end,
-      professionalId: Number(professionalId), // 👈 nos aseguramos de que es un número
+      professionalId: Number(professionalId),
+      roomId: Number(roomId), // 👈 Aquí añadimos roomId
       repeat,
       repeatUntil: repeatUntil ? new Date(repeatUntil) : null,
       seriesId: selectedEvent?.seriesId,
-      applyToSeries: applyToSeries && selectedEvent?.seriesId !== undefined,
+      applyToSeries,
     };
-  
-    // Si es una edición, incluye el id existente
-    if (selectedEvent?.id !== undefined) {
-      eventData.id = selectedEvent.id;
+
+    const hasConflict = checkConflict(eventData);
+
+    if (hasConflict && !forceSave) {
+      setConflictMessage("⚠️ Este profesional o despacho ya tienen un evento en ese horario.");
+      setPendingEvent(eventData); // guardamos el evento temporalmente
+      setForceSave(true);         // marcamos que se desea forzar
+      return;
     }
   
+    // Si no hay conflicto o el usuario ya confirmó que quiere guardar igual
+    setConflictMessage('');
     onSave(eventData);
     onRequestClose();
+    setForceSave(false);     // limpiamos
+    setPendingEvent(null);   // limpiamos
   };
 
+  const handleClose = () => {
+    setConflictMessage('');
+    setForceSave(false);
+    onRequestClose(); // Esta sigue viniendo de CalendarView
+  };
+  
+  
 
   return (
     <Modal
       isOpen={isOpen}
-      onRequestClose={onRequestClose}
+      onRequestClose={handleClose}
       contentLabel="Crear o editar evento"
       style={{
         content: {
@@ -112,6 +159,17 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
+
+        <label>Consultorio:</label>
+        <select
+          value={roomId}
+          onChange={(e) => setRoomId(Number(e.target.value))}
+        >
+          {rooms.map((room) => (
+            <option key={room.id} value={room.id}>{room.name}</option>
+          ))}
+        </select>
+
         <label>Inicio:</label>
         <input
           type="datetime-local"
@@ -159,6 +217,33 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
           </div>
         )}
 
+        {conflictMessage && (
+          <>
+            <div style={{ color: 'red', marginTop: '1rem' }}>
+              {conflictMessage}
+            </div>
+            {forceSave && (
+              <button
+                type="button"
+                style={{ marginTop: '1rem', backgroundColor: 'orange' }}
+                onClick={() => {
+                  if (pendingEvent) {
+                    onSave(pendingEvent);
+                    onRequestClose();
+                    setForceSave(false);
+                    setPendingEvent(null);
+                    setConflictMessage('');
+                  }
+                }}
+              >
+                Guardar de todos modos
+              </button>
+            )}
+          </>
+        )}
+
+
+
 
         <button type="submit" style={{ marginTop: '1rem' }}>
           {selectedEvent ? 'Guardar cambios' : 'Crear evento'}
@@ -170,7 +255,7 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
       style={{ marginTop: '1rem', backgroundColor: 'red', color: 'white' }}
       onClick={() => {
         onDelete(selectedEvent.id); // elimina solo este
-        onRequestClose();
+        handleClose();
       }}
     >
       Eliminar solo este
@@ -182,7 +267,7 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
               style={{ marginTop: '1rem', marginLeft: '1rem', backgroundColor: 'darkred', color: 'white' }}
               onClick={() => {
                 onDelete(null, selectedEvent.seriesId); // elimina toda la serie
-                onRequestClose();
+                handleClose();
               }}
             >
               Eliminar toda la serie
