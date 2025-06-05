@@ -249,32 +249,49 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
           {selectedEvent ? 'Guardar cambios' : 'Crear evento'}
         </button>
         {selectedEvent && (
-  <>
-    <button
-      type="button"
-      style={{ marginTop: '1rem', backgroundColor: 'red', color: 'white' }}
-      onClick={() => {
-        onDelete(selectedEvent.id); // elimina solo este
-        handleClose();
-      }}
-    >
-      Eliminar solo este
-    </button>
+            <div style={{ marginTop: "1rem" }}>
+              {/* Si es parte de una serie, mostrar opción doble */}
+              {selectedEvent.seriesId ? (
+                <>
+                  <button
+                    style={{ backgroundColor: "red", color: "white", marginRight: "1rem" }}
+                    onClick={() => {
+                      if (window.confirm("¿Eliminar solo este evento?")) {
+                        onDelete(selectedEvent.id, null);
+                        onRequestClose();
+                      }
+                    }}
+                  >
+                    Eliminar solo este evento
+                  </button>
+                  <button
+                    style={{ backgroundColor: "#a00", color: "white" }}
+                    onClick={() => {
+                      if (window.confirm("¿Eliminar toda la serie de eventos?")) {
+                        onDelete(null, selectedEvent.seriesId);
+                        onRequestClose();
+                      }
+                    }}
+                  >
+                    Eliminar toda la serie
+                  </button>
+                </>
+              ) : (
+                <button
+                  style={{ backgroundColor: "red", color: "white" }}
+                  onClick={() => {
+                    if (window.confirm("¿Eliminar este evento?")) {
+                      onDelete(selectedEvent.id, null);
+                      onRequestClose();
+                    }
+                  }}
+                >
+                  Eliminar evento
+                </button>
+              )}
+            </div>
+)}
 
-          {selectedEvent.seriesId && (
-            <button
-              type="button"
-              style={{ marginTop: '1rem', marginLeft: '1rem', backgroundColor: 'darkred', color: 'white' }}
-              onClick={() => {
-                onDelete(null, selectedEvent.seriesId); // elimina toda la serie
-                handleClose();
-              }}
-            >
-              Eliminar toda la serie
-            </button>
-          )}
-        </>
-      )}
 
       </form>
     </Modal>

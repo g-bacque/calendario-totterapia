@@ -4,7 +4,7 @@
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { Calendar, dateFnsLocalizer } from "react-big-calendar";
-import { useState } from "react";
+import { useEffect, useState } from 'react';
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import './CalendarCustomStyles.css';
 import { format, parse, startOfWeek, getDay } from "date-fns";
@@ -15,6 +15,7 @@ import ProfessionalFilter from './ProfessionalFilter';
 import RoomFilter from './RoomFilter';
 import { generateSeriesId, getNextEventId, generateRepeatedEvents } from "../utils/eventUtils";
 import { rooms } from '../data/rooms'; // ajusta ruta si es necesario
+import { supabase } from '../supabaseClient';
 
 
 
@@ -43,24 +44,29 @@ const professionals = [
 
 
 export default function CalendarView() {
-    const [events, setEvents] = useState([
-        {
-          id: 1,
-          title: "Sesión con Juan Pérez",
-          start: new Date(2025, 5, 3, 16, 0),
-          end: new Date(2025, 5, 3, 16, 45),
-          professionalId: 1,
-          roomId: 2
-        },
-        {
-          id: 2,
-          title: "Evaluación inicial",
-          start: new Date(2025, 5, 4, 10, 0),
-          end: new Date(2025, 5, 4, 10, 45),
-          professionalId: 2,
-          roomId: 1
-        }
-      ]);
+  const [events, setEvents] = useState([]);
+
+  useEffect(() => {
+    async function fetchEvents() {
+      const { data, error } = await supabase.from('events').select('*');
+  
+      if (error) {
+        console.error('Error al obtener eventos:', error);
+      } else {
+        // 👇 Parseamos start y end a tipo Date
+        const parsedEvents = data.map(event => ({
+          ...event,
+          start: new Date(event.start),
+          end: new Date(event.end),
+        }));
+  
+        setEvents(parsedEvents);
+      }
+    }
+  
+    fetchEvents();
+  }, []);
+  
       
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
@@ -71,6 +77,28 @@ export default function CalendarView() {
   const [selectedProfessionals, setSelectedProfessionals] = useState(
     professionals.map((p) => p.id) // al principio, todos están seleccionados
   );
+  // 👇 Justo después de useState (por ejemplo, donde tengas: const [events, setEvents] = useState([]))
+  const fetchEvents = async () => {
+    const { data, error } = await supabase.from('events').select('*');
+  
+    if (error) {
+      console.error('Error al obtener eventos:', error);
+    } else {
+      const parsedEvents = data.map(event => ({
+        ...event,
+        start: new Date(event.start),
+        end: new Date(event.end),
+      }));
+  
+      setEvents(parsedEvents);
+    }
+  };
+  
+  useEffect(() => {
+    fetchEvents();
+  }, []);
+  
+
 
 
   const toggleProfessional = (id) => {
@@ -181,7 +209,7 @@ export default function CalendarView() {
   
   
 
-  const handleSaveEvent = (newEvent) => {
+  const handleSaveEvent = async (newEvent) => {
     console.log("Guardando evento:", newEvent);
 
      // Validar conflictos antes de guardar
@@ -229,9 +257,36 @@ export default function CalendarView() {
   
     // 2. Evento único
     if (!newEvent.repeat || newEvent.repeat === 'none') {
-      setEvents([...events, { ...newEvent, id: nextId }]);
+      const { data, error } = await supabase
+        .from('events')
+        .insert([
+          {
+            title: newEvent.title,
+            professionalId: newEvent.professionalId,
+            roomId: newEvent.roomId,
+            start: newEvent.start.toISOString(),
+            end: newEvent.end.toISOString(),
+            repeat: newEvent.repeat,
+            repeatUntil: newEvent.repeatUntil
+              ? newEvent.repeatUntil.toISOString()
+              : null,
+            seriesId: null,
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error al guardar en Supabase:', error.message);
+        alert('Ocurrió un error al guardar el evento.');
+        return;
+      }
+
+      setEvents([...events, data]); // actualiza el estado local también
       return;
     }
+
+
   
     // 3. Crear eventos repetitivos
     const startDate = new Date(newEvent.start);
