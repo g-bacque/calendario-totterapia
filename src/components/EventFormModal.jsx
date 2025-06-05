@@ -4,11 +4,19 @@ import { useState, useEffect } from 'react';
 Modal.setAppElement('#root'); // para accesibilidad
 
 export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInfo, professionals, selectedEvent, onDelete }) {
+  
+  //HOOK STATES
+  
   const [title, setTitle] = useState('');
   const [professionalId, setProfessionalId] = useState(professionals[0]?.id || '');
   const [start, setStart] = useState(null);
   const [end, setEnd] = useState(null);
   const [repeat, setRepeat] = useState('none');
+  const [repeatUntil, setRepeatUntil] = useState('');
+  const [applyToSeries, setApplyToSeries] = useState(false);
+
+
+  
 
 
   useEffect(() => {
@@ -17,18 +25,34 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
       setProfessionalId(String(selectedEvent.professionalId) || '');
       setStart(new Date(selectedEvent.start));
       setEnd(new Date(selectedEvent.end));
+      setRepeat(selectedEvent.repeat || 'none');
+      setRepeatUntil(
+        selectedEvent.repeatUntil
+          ? new Date(selectedEvent.repeatUntil).toISOString().split('T')[0]
+          : ''
+      );
+      setApplyToSeries(false); // por defecto en falso al abrir
     } else if (slotInfo) {
       setTitle('');
       setProfessionalId(professionals[0]?.id || '');
       setStart(slotInfo.start);
       setEnd(slotInfo.end);
+      setRepeat('none');
+      setRepeatUntil('');
+      setApplyToSeries(false);
     } else {
+      // en caso de que no haya ni slotInfo ni selectedEvent
       setTitle('');
       setProfessionalId(professionals[0]?.id || '');
       setStart(null);
       setEnd(null);
+      setRepeat('none');
+      setRepeatUntil('');
+      setApplyToSeries(false);
     }
   }, [slotInfo, selectedEvent, professionals]);
+  
+  
   
   
 
@@ -41,6 +65,10 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
       start,
       end,
       professionalId: Number(professionalId), // 👈 nos aseguramos de que es un número
+      repeat,
+      repeatUntil: repeatUntil ? new Date(repeatUntil) : null,
+      seriesId: selectedEvent?.seriesId,
+      applyToSeries: applyToSeries && selectedEvent?.seriesId !== undefined,
     };
   
     // Si es una edición, incluye el id existente
@@ -100,21 +128,69 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
 
         {/* Aquí podrías poner inputs de fecha si lo deseas */}
 
+        <label>Repetir:</label>
+        <select value={repeat} onChange={(e) => setRepeat(e.target.value)}>
+          <option value="none">No repetir</option>
+          <option value="daily">Cada día</option>
+          <option value="weekly">Cada semana</option>
+        </select>
+
+        {repeat !== 'none' && (
+          <>
+            <label>Repetir hasta:</label>
+            <input
+              type="date"
+              value={repeatUntil}
+              onChange={(e) => setRepeatUntil(e.target.value)}
+            />
+          </>
+        )}
+
+        {selectedEvent?.seriesId && (
+          <div style={{ marginTop: '1rem' }}>
+            <label>
+              <input
+                type="checkbox"
+                checked={applyToSeries}
+                onChange={(e) => setApplyToSeries(e.target.checked)}
+              />
+              Aplicar cambios a toda la serie
+            </label>
+          </div>
+        )}
+
+
         <button type="submit" style={{ marginTop: '1rem' }}>
           {selectedEvent ? 'Guardar cambios' : 'Crear evento'}
         </button>
         {selectedEvent && (
-          <button
-            type="button"
-            style={{ marginLeft: '1rem', backgroundColor: 'red', color: 'white' }}
-            onClick={() => {
-              onDelete(selectedEvent.id);
-              onRequestClose();
-            }}
-          >
-            Eliminar
-          </button>
-        )}
+  <>
+    <button
+      type="button"
+      style={{ marginTop: '1rem', backgroundColor: 'red', color: 'white' }}
+      onClick={() => {
+        onDelete(selectedEvent.id); // elimina solo este
+        onRequestClose();
+      }}
+    >
+      Eliminar solo este
+    </button>
+
+          {selectedEvent.seriesId && (
+            <button
+              type="button"
+              style={{ marginTop: '1rem', marginLeft: '1rem', backgroundColor: 'darkred', color: 'white' }}
+              onClick={() => {
+                onDelete(null, selectedEvent.seriesId); // elimina toda la serie
+                onRequestClose();
+              }}
+            >
+              Eliminar toda la serie
+            </button>
+          )}
+        </>
+      )}
+
       </form>
     </Modal>
   );

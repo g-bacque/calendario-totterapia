@@ -101,23 +101,103 @@ export default function CalendarView() {
   };
   
   
-  const handleDeleteEvent = (idToDelete) => {
-    setEvents(events.filter((e) => e.id !== idToDelete));
+  const handleDeleteEvent = (idToDelete, seriesId = null) => {
+    if (seriesId) {
+      // Borrar todos los eventos con ese seriesId
+      setEvents((prev) => prev.filter((e) => e.seriesId !== seriesId));
+    } else {
+      // Borrar solo uno
+      setEvents((prev) => prev.filter((e) => e.id !== idToDelete));
+    }
   };
+  
 
   const handleSaveEvent = (newEvent) => {
     console.log("Guardando evento:", newEvent);
-    if (newEvent.id) {
-        // Es una edición: reemplaza el evento con el mismo ID
+  
+    const nextId = events.length > 0 ? Math.max(...events.map(e => e.id)) + 1 : 1;
+  
+    // 1. Si es una edición de evento existente
+    if (newEvent.id !== undefined) {
+      // Si se quiere aplicar la edición a toda la serie
+      if (newEvent.applyToSeries && newEvent.seriesId) {
+        const editedStart = newEvent.start;
+        const editedEnd = newEvent.end;
+      
+        setEvents((prevEvents) =>
+          prevEvents.map((e) => {
+            if (e.seriesId !== newEvent.seriesId) return e;
+      
+            const updatedStart = new Date(e.start);
+            updatedStart.setHours(editedStart.getHours(), editedStart.getMinutes());
+      
+            const updatedEnd = new Date(e.end);
+            updatedEnd.setHours(editedEnd.getHours(), editedEnd.getMinutes());
+      
+            return {
+              ...e,
+              ...(newEvent.title !== undefined && { title: newEvent.title }),
+              ...(newEvent.professionalId !== undefined && { professionalId: newEvent.professionalId }),
+              start: updatedStart,
+              end: updatedEnd,
+            };
+          })
+        );
+      }
+      
+      
+       else {
+        // Solo editar el evento individual
         setEvents((prevEvents) =>
           prevEvents.map((e) => (e.id === newEvent.id ? newEvent : e))
         );
-      } else {
-        // Es un nuevo evento
-        const nextId = events.length > 0 ? Math.max(...events.map((e) => e.id)) + 1 : 1;
-        setEvents([...events, { ...newEvent, id: nextId }]);
       }
+      return;
+    }
+  
+    // 2. Si no es repetitivo → crear evento único
+    if (!newEvent.repeat || newEvent.repeat === 'none') {
+      setEvents([...events, { ...newEvent, id: nextId }]);
+      return;
+    }
+  
+    // 3. Crear eventos repetitivos
+    const startDate = new Date(newEvent.start);
+    const endDate = new Date(newEvent.end);
+    const untilDate = newEvent.repeatUntil ? new Date(newEvent.repeatUntil) : null;
+  
+    const repeatedEvents = [];
+    let count = 0;
+    const maxRepeats = 100; // prevención para evitar loops infinitos
+    const interval = newEvent.repeat === 'daily' ? 1 : 7;
+    const seriesId = Date.now(); // único para esta serie
+  
+    let currentStart = new Date(startDate);
+    let currentEnd = new Date(endDate);
+  
+    while (
+      (!untilDate || currentStart <= untilDate) &&
+      count < maxRepeats
+    ) {
+      repeatedEvents.push({
+        ...newEvent,
+        id: nextId + count,
+        start: new Date(currentStart),
+        end: new Date(currentEnd),
+        seriesId,
+      });
+  
+      currentStart.setDate(currentStart.getDate() + interval);
+      currentEnd.setDate(currentEnd.getDate() + interval);
+      count++;
+    }
+  
+    setEvents([...events, ...repeatedEvents]);
   };
+  
+  
+  
+  
   
   
   const professionalColors = {
