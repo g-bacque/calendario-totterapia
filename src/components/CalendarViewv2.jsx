@@ -40,6 +40,28 @@ export default function CalendarView() {
   const [selectedProfessionals, setSelectedProfessionals] = useState(professionals.map((p) => p.id));
   const [selectedRooms, setSelectedRooms] = useState(rooms.map((r) => r.id));
 
+  const EventComponent = ({ event }) => {
+    const room = rooms.find(r => r.id === event.roomId);
+    const roomNumber = room?.name.match(/\d+/)?.[0] || '';
+  
+    return (
+      <div className="event-container">
+        <div style={{ zIndex: 1 }}>{event.title}</div>
+  
+        {room && (
+          <div
+            className="event-room-badge"
+            style={{ backgroundColor: room.color }}
+          >
+            {roomNumber}
+          </div>
+        )}
+      </div>
+    );
+  };
+  
+  
+
   const fetchEvents = async () => {
     const { data, error } = await supabase.from('events').select('*');
     if (error) {
@@ -110,17 +132,14 @@ export default function CalendarView() {
     const professional = professionals.find(p => p.id === event.professionalId);
     const room = rooms.find(r => r.id === event.roomId);
   
-    const bgColor = professional?.color || '#D3D3D3';
-    const borderColor = room?.color || '#888';
-  
     return {
       style: {
-        backgroundColor: bgColor,
-        border: `2px solid ${borderColor}`,
-        borderRadius: '5px',
-        color: 'black',
-        padding: '4px',
-      },
+        backgroundColor: professional?.color || '#ccc',
+        borderLeft: `4px solid ${room?.color || '#333'}`,
+        color: 'white',
+        paddingLeft: '4px',
+        borderRadius: '4px',
+      }
     };
   };
   
@@ -249,6 +268,7 @@ export default function CalendarView() {
   
 
   const handleSaveEvent = async (newEvent) => {
+    
     if (newEvent.id !== undefined) {
       if (newEvent.applyToSeries && newEvent.seriesId) {
         // ✅ EDITAR CADA EVENTO INDIVIDUALMENTE PARA MANTENER LA FECHA Y CAMBIAR SOLO LA HORA
@@ -297,6 +317,75 @@ export default function CalendarView() {
         return;
       }
       else {
+        // 🆕 Si es un evento individual convertido en repetitivo:
+        if (newEvent.repeat !== 'none' && !newEvent.seriesId) {
+          if (!newEvent.repeatUntil) {
+            alert("Por favor, selecciona una fecha límite para la repetición.");
+            return;
+          }
+      
+          // Borramos el evento original
+          const { error: deleteError } = await supabase
+            .from('events')
+            .delete()
+            .eq('id', newEvent.id);
+      
+          if (deleteError) {
+            console.error("Error al eliminar evento original:", deleteError.message);
+            alert("No se pudo eliminar el evento original.");
+            return;
+          }
+      
+          // Creamos la nueva serie de eventos
+          const startDate = new Date(newEvent.start);
+          const endDate = new Date(newEvent.end);
+          const untilDate = new Date(newEvent.repeatUntil);
+          const repeatedEvents = [];
+          const interval = newEvent.repeat === 'daily' ? 1 : 7;
+          const seriesId = Date.now();
+          let count = 0;
+          const maxRepeats = 100;
+      
+          let currentStart = new Date(startDate);
+          let currentEnd = new Date(endDate);
+      
+          while (currentStart <= untilDate && count < maxRepeats) {
+            repeatedEvents.push({
+              title: newEvent.title,
+              professionalId: newEvent.professionalId,
+              roomId: newEvent.roomId,
+              start: currentStart.toISOString(),
+              end: currentEnd.toISOString(),
+              repeat: newEvent.repeat,
+              repeatUntil: newEvent.repeatUntil,
+              seriesId,
+            });
+      
+            currentStart.setDate(currentStart.getDate() + interval);
+            currentEnd.setDate(currentEnd.getDate() + interval);
+            count++;
+          }
+      
+          const { data, error } = await supabase.from('events').insert(repeatedEvents).select();
+      
+          if (error) {
+            console.error("Error al guardar eventos repetitivos:", error.message);
+            alert("Ocurrió un error al guardar los eventos repetitivos.");
+            return;
+          }
+      
+          setEvents([
+            ...events.filter((e) => e.id !== newEvent.id), // limpiamos el original si ya estaba cargado
+            ...data.map((e) => ({
+              ...e,
+              start: new Date(e.start),
+              end: new Date(e.end),
+            })),
+          ]);
+      
+          return;
+        }
+      
         // ✅ EDITAR SOLO ESTE EVENTO INDIVIDUAL
         const { data, error } = await supabase
           .from('events')
@@ -317,7 +406,6 @@ export default function CalendarView() {
           return;
         }
       
-        // Actualiza localmente
         setEvents((prev) =>
           prev.map((e) =>
             e.id === data.id ? { ...data, start: new Date(data.start), end: new Date(data.end) } : e
@@ -326,6 +414,7 @@ export default function CalendarView() {
       
         return;
       }
+      
       
     
       return;
@@ -422,6 +511,8 @@ export default function CalendarView() {
     
   };
 
+  
+
   return (
     <div style={{ display: "flex", height: "100vh" }}>
       <Sidebar
@@ -453,6 +544,9 @@ export default function CalendarView() {
           onSelectSlot={handleSelectSlot}
           onSelectEvent={handleSelectEvent}
           eventPropGetter={eventStyleGetter}
+          components={{
+            event: EventComponent
+          }}
           draggableAccessor={() => true}
           onEventDrop={handleEventDrop}
           onEventResize={handleEventResize}

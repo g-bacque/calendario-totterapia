@@ -15,4 +15,36 @@
     font-size: 0.95rem;
     padding: 2px 4px;
   }
+
+  .event-container {
+    position: relative;
+    height: 100%;
+    width: 100%;
+    padding: 4px;
+    padding-bottom: 24px; /* Espacio reservado dentro del contenedor para el distintivo */
+    box-sizing: border-box;
+    overflow: visible; /* Asegura que el distintivo no se recorte */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  
+  .event-room-badge {
+    align-self: flex-end; /* Empuja el distintivo a la esquina inferior derecha */
+    margin-top: auto; /* Empuja hacia abajo */
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--room-color); /* se sobrescribe en línea */
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+  }
+  
+
+
   
