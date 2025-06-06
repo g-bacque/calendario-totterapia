@@ -14,6 +14,9 @@ import ProfessionalFilter from './ProfessionalFilter';
 import RoomFilter from './RoomFilter';
 import { rooms } from '../data/rooms';
 import { supabase } from '../supabaseClient';
+import { professionals } from '../data/professionals';
+import Sidebar from './Sidebar';
+
 
 const locales = { es };
 const localizer = dateFnsLocalizer({
@@ -25,12 +28,6 @@ const localizer = dateFnsLocalizer({
 });
 
 const DnDCalendar = withDragAndDrop(Calendar);
-
-const professionals = [
-  { id: 1, name: "Dra. Martínez" },
-  { id: 2, name: "Dr. Rodríguez" },
-  { id: 3, name: "Lic. García" }
-];
 
 export default function CalendarView() {
   const [events, setEvents] = useState([]);
@@ -62,16 +59,36 @@ export default function CalendarView() {
   }, []);
 
   const toggleProfessional = (id) => {
-    setSelectedProfessionals(prev =>
-      prev.includes(id) ? prev.filter(pid => pid !== id) : [...prev, id]
-    );
+    setSelectedProfessionals(prev => {
+      const newSelection = prev.includes(id)
+        ? prev.filter(pid => pid !== id)
+        : [...prev, id];
+  
+      // 👇 Si después de cambiar el profesional, no hay despachos seleccionados, seleccionamos todos
+      if (selectedRooms.length === 0) {
+        setSelectedRooms(rooms.map(r => r.id));
+      }
+  
+      return newSelection;
+    });
   };
+  
 
   const toggleRoom = (id) => {
-    setSelectedRooms(prev =>
-      prev.includes(id) ? prev.filter(rid => rid !== id) : [...prev, id]
-    );
+    setSelectedRooms(prev => {
+      const newSelection = prev.includes(id)
+        ? prev.filter(rid => rid !== id)
+        : [...prev, id];
+  
+      // 👇 Si no hay profesionales seleccionados, seleccionamos todos
+      if (selectedProfessionals.length === 0) {
+        setSelectedProfessionals(professionals.map(p => p.id));
+      }
+  
+      return newSelection;
+    });
   };
+  
 
   const toggleAllProfessionals = () => {
     setSelectedProfessionals(
@@ -90,22 +107,24 @@ export default function CalendarView() {
   );
 
   const eventStyleGetter = (event) => {
-    const colors = {
-      1: '#FFB6C1',
-      2: '#ADD8E6',
-      3: '#90EE90',
-    };
-    const color = colors[event.professionalId] || '#D3D3D3';
+    const professional = professionals.find(p => p.id === event.professionalId);
+    const room = rooms.find(r => r.id === event.roomId);
+  
+    const bgColor = professional?.color || '#D3D3D3';
+    const borderColor = room?.color || '#888';
+  
     return {
       style: {
-        backgroundColor: color,
+        backgroundColor: bgColor,
+        border: `2px solid ${borderColor}`,
         borderRadius: '5px',
         color: 'black',
-        border: 'none',
-        padding: '4px'
-      }
+        padding: '4px',
+      },
     };
   };
+  
+  
 
   const handleSelectSlot = (slotInfo) => {
     setSelectedSlot(slotInfo);
@@ -155,6 +174,78 @@ export default function CalendarView() {
       alert("Ocurrió un error inesperado al eliminar.");
     }
   };
+
+  const handleEventDrop = async ({ event, start, end }) => {
+    try {
+      const updatedEvent = {
+        ...event,
+        start: new Date(start),
+        end: new Date(end),
+      };
+  
+      const { data, error } = await supabase
+        .from('events')
+        .update({
+          start: updatedEvent.start.toISOString(),
+          end: updatedEvent.end.toISOString(),
+        })
+        .eq('id', event.id)
+        .select()
+        .single();
+  
+      if (error) {
+        console.error("Error al actualizar evento con drag and drop:", error.message);
+        alert("No se pudo mover el evento.");
+        return;
+      }
+  
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.id === data.id ? { ...data, start: new Date(data.start), end: new Date(data.end) } : e
+        )
+      );
+    } catch (err) {
+      console.error("Error inesperado al mover evento:", err);
+      alert("Ocurrió un error al mover el evento.");
+    }
+  };
+
+  const handleEventResize = async ({ event, start, end }) => {
+    try {
+      const updatedEvent = {
+        ...event,
+        start: new Date(start),
+        end: new Date(end),
+      };
+  
+      const { data, error } = await supabase
+        .from('events')
+        .update({
+          start: updatedEvent.start.toISOString(),
+          end: updatedEvent.end.toISOString(),
+        })
+        .eq('id', event.id)
+        .select()
+        .single();
+  
+      if (error) {
+        console.error("Error al cambiar duración del evento:", error.message);
+        alert("No se pudo modificar la duración del evento.");
+        return;
+      }
+  
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.id === data.id ? { ...data, start: new Date(data.start), end: new Date(data.end) } : e
+        )
+      );
+    } catch (err) {
+      console.error("Error inesperado al modificar duración:", err);
+      alert("Ocurrió un error al modificar el evento.");
+    }
+  };
+  
+  
   
 
   const handleSaveEvent = async (newEvent) => {
@@ -332,59 +423,61 @@ export default function CalendarView() {
   };
 
   return (
-    <div style={{ padding: "1rem" }}>
-      <h2>Calendario de Profesionales</h2>
-
-      <ProfessionalFilter
+    <div style={{ display: "flex", height: "100vh" }}>
+      <Sidebar
         professionals={professionals}
         selectedProfessionals={selectedProfessionals}
         toggleProfessional={toggleProfessional}
         toggleAllProfessionals={toggleAllProfessionals}
-      />
-
-      <RoomFilter
         rooms={rooms}
         selectedRooms={selectedRooms}
         toggleRoom={toggleRoom}
         toggleAllRooms={toggleAllRooms}
       />
-
-      <DnDCalendar
-        localizer={localizer}
-        events={filteredEvents}
-        startAccessor="start"
-        endAccessor="end"
-        style={{ height: "80vh" }}
-        views={["month", "week", "day"]}
-        view={view}
-        date={date}
-        onView={setView}
-        onNavigate={setDate}
-        selectable
-        onSelectSlot={handleSelectSlot}
-        onSelectEvent={handleSelectEvent}
-        eventPropGetter={eventStyleGetter}
-      />
-
-      <EventFormModal
-        isOpen={modalOpen}
-        onRequestClose={() => {
-          setModalOpen(false);
-          setSelectedEvent(null);
-        }}
-        onSave={handleSaveEvent}
-        
-        slotInfo={selectedSlot}
-        selectedEvent={selectedEvent}
-        professionals={professionals}
-        events={events}
-        onDelete={(id, seriesId) => {
-          handleDeleteEvent(id, seriesId);
-          setModalOpen(false); // 👈 cerrar el modal
-          setSelectedEvent(null); // 👈 limpiar evento seleccionado
-        }}
-        
-      />
+  
+      <div style={{ flex: 1, padding: "1rem" }}>
+        <h2>Calendario de Profesionales</h2>
+  
+        <DnDCalendar
+          localizer={localizer}
+          events={filteredEvents}
+          startAccessor="start"
+          endAccessor="end"
+          style={{ height: "80vh" }}
+          views={["month", "week", "day"]}
+          view={view}
+          date={date}
+          onView={setView}
+          onNavigate={setDate}
+          selectable={!modalOpen}
+          onSelectSlot={handleSelectSlot}
+          onSelectEvent={handleSelectEvent}
+          eventPropGetter={eventStyleGetter}
+          draggableAccessor={() => true}
+          onEventDrop={handleEventDrop}
+          onEventResize={handleEventResize}
+          resizable
+        />
+  
+        <EventFormModal
+          isOpen={modalOpen}
+          onRequestClose={() => {
+            setModalOpen(false);
+            setSelectedEvent(null);
+          }}
+          onSave={handleSaveEvent}
+          slotInfo={selectedSlot}
+          selectedEvent={selectedEvent}
+          professionals={professionals}
+          events={events}
+          onDelete={(id, seriesId) => {
+            handleDeleteEvent(id, seriesId);
+            setModalOpen(false);
+            setSelectedEvent(null);
+          }}
+        />
+      </div>
     </div>
   );
+  
 }

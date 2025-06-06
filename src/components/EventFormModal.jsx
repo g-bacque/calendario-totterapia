@@ -1,5 +1,5 @@
 import Modal from 'react-modal';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { rooms } from '../data/rooms';
 
 
@@ -20,6 +20,8 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
   const [conflictMessage, setConflictMessage] = useState('');
   const [forceSave, setForceSave] = useState(false);
   const [pendingEvent, setPendingEvent] = useState(null);
+  const titleInputRef = useRef(null);
+
 
 
 
@@ -28,6 +30,7 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
 
   
 
+  
 
   useEffect(() => {
     if (selectedEvent) {
@@ -63,6 +66,14 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
       setApplyToSeries(false);
     }
   }, [slotInfo, selectedEvent, professionals]);
+
+  useEffect(() => {
+    if (isOpen && titleInputRef.current) {
+      setTimeout(() => {
+        titleInputRef.current.focus();
+      }, 0);
+    }
+  }, [isOpen]);
 
 
   
@@ -125,14 +136,22 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
     setForceSave(false);
     onRequestClose(); // Esta sigue viniendo de CalendarView
   };
+
+  const handleAfterOpen = () => {
+    if (titleInputRef.current) {
+      titleInputRef.current.focus();
+    }
+  };  
   
   
 
   return (
     <Modal
       isOpen={isOpen}
+      onAfterOpen={handleAfterOpen}
       onRequestClose={handleClose}
       contentLabel="Crear o editar evento"
+      shouldFocusAfterRender={true}
       style={{
         content: {
           top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
@@ -141,10 +160,15 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
       }}
     >
       <h3>{selectedEvent ? 'Editar evento' : 'Nuevo evento'}</h3>
-      <form onSubmit={handleSubmit}>
+      <div
+  onClick={(e) => e.stopPropagation()}
+  onMouseDown={(e) => e.stopPropagation()}
+>
+      <form onSubmit={handleSubmit} >
         <label>Título:</label>
         <input
           type="text"
+          ref={titleInputRef}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           required
@@ -294,6 +318,7 @@ export default function EventFormModal({ isOpen, onRequestClose, onSave, slotInf
 
 
       </form>
+      </div>
     </Modal>
   );
 }
